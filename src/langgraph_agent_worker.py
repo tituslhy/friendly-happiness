@@ -1,8 +1,7 @@
 import logging
 from uuid import uuid4
 from dataclasses import dataclass
-from typing import TypeVar
-from tqdm import tqdm
+from typing import TypeVar, Generic
 
 from langchain_core.messages import (
     AIMessage,
@@ -25,13 +24,17 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # AgentWorker output type needs to be invariant for use in both parameter and return positions
-WorkerOutputT = TypeVar('WorkerOutputT')
+WorkerOutputT = TypeVar('WorkerOutputT', bound=str)
+RawOutputT = TypeVar('RawOutputT', bound=list[BaseMessage])
 
 @dataclass
-class LangGraphAgentWorker(Worker):
+class LangGraphAgentWorker(
+    Worker[RawOutputT],             # the base “raw” output 
+    Generic[WorkerOutputT],         # your downstream “final” output
+):
     agent: CompiledStateGraph
     
-    async def run_task(self, params: TaskSendParams) -> None:
+    async def run_task(self, params: TaskSendParams) -> WorkerOutputT:
         task = await self.storage.load_task(params['id'])
         if task is None:
             raise ValueError(f'Task {params["id"]} not found')
@@ -63,9 +66,9 @@ class LangGraphAgentWorker(Worker):
             # Build artifacts
             artifacts = self.build_artifacts(response)
             
-        except Exception as e:
+        except Exception:
             await self.storage.update_task(task['id'], state='failed')
-            raise ValueError(e)
+            raise 
         
         else:
             await self.storage.update_task(
@@ -99,7 +102,7 @@ class LangGraphAgentWorker(Worker):
                 messages.append(HumanMessage(content=content))
         return messages
     
-    def _get_content_from_a2a_part(self, parts: list[Part]) -> list[BaseMessage]:
+    def _get_content_from_a2a_part(self, parts: list[Part]) -> str:
         """
         Converts A2A Part objects into LangChain Message objects.
         
@@ -112,7 +115,7 @@ class LangGraphAgentWorker(Worker):
     def _response_to_a2a_message(self, messages: list[BaseMessage]):
         """Convert LangChain messages to A2A Message format."""
         results = []
-        for message in tqdm(messages):
+        for message in messages:
             part = TextPart(text=message.content, kind='text')
             if isinstance(message, HumanMessage):
                 role = 'user'
@@ -127,5 +130,3 @@ class LangGraphAgentWorker(Worker):
                     )
                 )
         return results
-        
-        
