@@ -7,15 +7,12 @@ from tqdm import tqdm
 from langchain_core.messages import (
     AIMessage,
     HumanMessage,
-    BaseMessage,
-    SystemMessage,
-    ToolMessage,
+    BaseMessage
 )
 from langgraph.graph.state import CompiledStateGraph
 
 from fasta2a.worker import Worker
 from fasta2a.schema import (
-    AgentProvider,
     Artifact,
     TaskSendParams,
     TaskIdParams,
@@ -24,7 +21,7 @@ from fasta2a.schema import (
     TextPart
 )
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # AgentWorker output type needs to be invariant for use in both parameter and return positions
@@ -60,7 +57,7 @@ class LangGraphAgentWorker(Worker):
                 result['messages'] #dump all messages into the result
             )
             
-            # Convert new messages to A2A format for task history
+            # Convert new messages to A2A format for task history.  Note: we only keep human and agent messages
             a2a_messages: list[Message] = self._response_to_a2a_message(result['messages'])
             
             # Build artifacts
